@@ -65,7 +65,10 @@ export class NativeGeolocationWeb implements NativeGeolocationPlugin {
           webkitCompassHeading?: number;
         };
 
-        if (typeof orientationEvent.webkitCompassHeading === 'number') {
+        if (
+          typeof orientationEvent.webkitCompassHeading === 'number' &&
+          Number.isFinite(orientationEvent.webkitCompassHeading)
+        ) {
           cleanup();
           resolve({ heading: orientationEvent.webkitCompassHeading });
           return;
@@ -73,7 +76,7 @@ export class NativeGeolocationWeb implements NativeGeolocationPlugin {
 
         if (
           typeof orientationEvent.alpha === 'number' &&
-          orientationEvent.absolute
+          Number.isFinite(orientationEvent.alpha)
         ) {
           cleanup();
           resolve({ heading: (360 - orientationEvent.alpha + 360) % 360 });

@@ -28,6 +28,8 @@ interface DeviceOrientationEventConstructorWithPermission {
   requestPermission?: () => Promise<'granted' | 'denied'>;
 }
 
+type CompassHeadingSource = 'webkit' | 'alpha-absolute' | 'alpha-relative';
+
 function normalizeDegrees(degrees: number) {
   return ((degrees % 360) + 360) % 360;
 }
@@ -39,6 +41,29 @@ function normalizeSignedDegrees(degrees: number) {
 
 function getContinuousAngle(nextAngle: number, previousAngle: number) {
   return previousAngle + normalizeSignedDegrees(nextAngle - previousAngle);
+}
+
+function extractHeadingFromOrientationEvent(
+  event: DeviceOrientationEventWithCompass,
+): { heading: number; source: CompassHeadingSource } | null {
+  if (
+    typeof event.webkitCompassHeading === 'number' &&
+    Number.isFinite(event.webkitCompassHeading)
+  ) {
+    return {
+      heading: normalizeDegrees(event.webkitCompassHeading),
+      source: 'webkit',
+    };
+  }
+
+  if (typeof event.alpha !== 'number' || !Number.isFinite(event.alpha)) {
+    return null;
+  }
+
+  return {
+    heading: normalizeDegrees(360 - event.alpha),
+    source: event.absolute ? 'alpha-absolute' : 'alpha-relative',
+  };
 }
 
 function smoothHeading(nextHeading: number, previousHeading: number) {
@@ -194,27 +219,25 @@ export default function QiblaCompassPage() {
 
     let frameId: number | null = null;
     let latestHeading: number | null = null;
+    let selectedSource: CompassHeadingSource | null = null;
 
     const updateHeading = (event: Event) => {
-      const orientationEvent = event as DeviceOrientationEventWithCompass;
-      let nextHeading: number | null = null;
-
-      if (typeof orientationEvent.webkitCompassHeading === 'number') {
-        nextHeading = normalizeDegrees(orientationEvent.webkitCompassHeading);
-      }
-
-      if (
-        typeof orientationEvent.alpha === 'number' &&
-        orientationEvent.absolute
-      ) {
-        nextHeading = normalizeDegrees(360 - orientationEvent.alpha);
-      }
-
-      if (nextHeading === null) {
+      const parsedHeading = extractHeadingFromOrientationEvent(
+        event as DeviceOrientationEventWithCompass,
+      );
+      if (!parsedHeading) {
         return;
       }
 
-      latestHeading = nextHeading;
+      if (selectedSource === null || parsedHeading.source === 'webkit') {
+        selectedSource = parsedHeading.source;
+      }
+
+      if (parsedHeading.source !== selectedSource) {
+        return;
+      }
+
+      latestHeading = parsedHeading.heading;
       if (frameId !== null) {
         return;
       }
